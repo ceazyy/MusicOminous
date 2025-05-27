@@ -1,22 +1,10 @@
-import { useStripe, Elements, PaymentElement, useElements } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { useLocation } from 'wouter';
-import backgroundImage from "@assets/pic.jpg";
-
-// Make sure to call `loadStripe` outside of a component's render to avoid
-// recreating the `Stripe` object on every render.
-if (!import.meta.env.VITE_STRIPE_PUBLIC_KEY) {
-  throw new Error('Missing required Stripe key: VITE_STRIPE_PUBLIC_KEY');
-}
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+import { Card } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
 
 interface CheckoutData {
-  clientSecret: string;
   album: {
     id: number;
     title: string;
@@ -25,182 +13,114 @@ interface CheckoutData {
   };
 }
 
-const CheckoutForm = ({ album }: { album: CheckoutData['album'] }) => {
-  const stripe = useStripe();
-  const elements = useElements();
-  const { toast } = useToast();
-  const [, navigate] = useLocation();
+export default function Checkout() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Get checkout data from location state
+  const checkoutData = location.state?.checkoutData as CheckoutData;
 
-    if (!stripe || !elements) {
-      return;
-    }
+  if (!checkoutData) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Invalid Checkout Session</h1>
+          <p className="mb-4">Please return to the album page and try again.</p>
+          <Button onClick={() => navigate('/')}>Return Home</Button>
+        </div>
+      </div>
+    );
+  }
 
-    setIsProcessing(true);
+  const handlePayment = async () => {
+    try {
+      setIsProcessing(true);
+      setError(null);
 
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: window.location.origin + "/",
-      },
-    });
-
-    setIsProcessing(false);
-
-    if (error) {
-      toast({
-        title: "Payment Failed",
-        description: error.message,
-        variant: "destructive",
+      // TODO: Integrate with Cashfree here
+      const response = await fetch('/api/initiate-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          albumId: checkoutData.album.id,
+        }),
       });
-    } else {
-      toast({
-        title: "Payment Successful",
-        description: "Your music download is ready!",
-      });
-      navigate("/");
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Payment failed');
+      }
+
+      // TODO: Handle Cashfree payment flow
+      // This is where you'll integrate with Cashfree's payment flow
+      
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during payment');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-black text-white relative">
-      {/* Static Background */}
-      <div 
-        className="fixed inset-0 z-0 background-static"
-        style={{
-          backgroundImage: `url(${backgroundImage})`,
-        }}
-      />
-      
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-        <motion.div
-          className="bg-black bg-opacity-80 border border-cyan-400 rounded-lg p-8 max-w-md w-full backdrop-blur-md"
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8">Checkout</h1>
+        
+        <Card className="p-6 mb-8">
+          <div className="flex items-center space-x-4 mb-6">
+            <img
+              src={checkoutData.album.coverImage}
+              alt={checkoutData.album.title}
+              className="w-24 h-24 object-cover rounded"
+            />
+            <div>
+              <h2 className="text-xl font-semibold">{checkoutData.album.title}</h2>
+              <p className="text-gray-600">Digital Album</p>
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <div className="flex justify-between mb-2">
+              <span>Price</span>
+              <span>${checkoutData.album.price}</span>
+            </div>
+            <div className="flex justify-between font-bold">
+              <span>Total</span>
+              <span>${checkoutData.album.price}</span>
+            </div>
+          </div>
+        </Card>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
+          </div>
+        )}
+
+        <Button
+          className="w-full"
+          onClick={handlePayment}
+          disabled={isProcessing}
         >
-          <div className="text-center mb-8">
-            <h1 className="font-metal text-3xl mb-4 text-glow-cyan">
-              COMPLETE YOUR PURCHASE
-            </h1>
-            <div className="mb-6">
-              <h2 className="font-metal text-xl text-white mb-2">{album.title}</h2>
-              <p className="text-cyan-400 text-2xl font-bold">${album.price}</p>
-            </div>
-          </div>
+          {isProcessing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            'Proceed to Payment'
+          )}
+        </Button>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="payment-element-container">
-              <PaymentElement 
-                options={{
-                  layout: "tabs",
-                  fields: {
-                    billingDetails: "auto"
-                  }
-                }}
-              />
-            </div>
-            
-            <Button
-              type="submit"
-              disabled={!stripe || isProcessing}
-              className="w-full bg-cyan-400 text-black font-bold py-3 hover:bg-white transition-all duration-300"
-            >
-              {isProcessing ? (
-                <>
-                  <i className="fas fa-spinner fa-spin mr-2"></i>
-                  PROCESSING...
-                </>
-              ) : (
-                <>
-                  <i className="fas fa-credit-card mr-2"></i>
-                  PAY ${album.price}
-                </>
-              )}
-            </Button>
-            
-            <Button
-              type="button"
-              onClick={() => navigate("/")}
-              className="w-full bg-transparent border border-gray-600 text-white hover:border-cyan-400 transition-all duration-300"
-            >
-              CANCEL
-            </Button>
-          </form>
-
-          <div className="text-center mt-6 text-gray-400 text-sm">
-            <i className="fas fa-lock mr-2"></i>
-            Secured by Stripe
-          </div>
-        </motion.div>
+        <p className="text-center text-sm text-gray-500 mt-4">
+          Your payment will be processed securely
+        </p>
       </div>
     </div>
-  );
-};
-
-export default function Checkout() {
-  const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [, navigate] = useLocation();
-
-  useEffect(() => {
-    // Get album ID from URL params
-    const urlParams = new URLSearchParams(window.location.search);
-    const albumId = urlParams.get('album');
-    
-    if (!albumId) {
-      navigate("/");
-      return;
-    }
-
-    // Create PaymentIntent
-    apiRequest("POST", "/api/create-payment-intent", { albumId: parseInt(albumId) })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        setCheckoutData(data);
-        setLoading(false);
-      })
-      .catch((error) => {
-        console.error("Error creating payment intent:", error);
-        navigate("/");
-      });
-  }, [navigate]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-cyan-400 border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-white font-metal">LOADING PAYMENT...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!checkoutData) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center text-red-400">
-          <p className="font-metal text-xl">PAYMENT INITIALIZATION FAILED</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <Elements stripe={stripePromise} options={{ clientSecret: checkoutData.clientSecret }}>
-      <CheckoutForm album={checkoutData.album} />
-    </Elements>
   );
 }

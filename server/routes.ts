@@ -1,14 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import Stripe from "stripe";
 import { storage } from "./storage";
-
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
-}
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-04-30.basil",
-});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all albums
@@ -38,8 +30,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create Stripe Checkout session
-  app.post("/api/create-payment-intent", async (req, res) => {
+  // Initialize payment (to be integrated with Cashfree)
+  app.post("/api/initiate-payment", async (req, res) => {
     try {
       const { albumId } = req.body;
       const album = await storage.getAlbum(albumId);
@@ -54,36 +46,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      const amount = Math.round(parseFloat(album.price || "0") * 100); // Convert to cents
-      
-      // Create Stripe Checkout Session
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: album.title,
-                description: `Digital download of ${album.title} by CEAZY`,
-              },
-              unit_amount: amount,
-            },
-            quantity: 1,
-          },
-        ],
-        mode: 'payment',
-        success_url: `${req.headers.origin || 'http://localhost:5000'}/?success=true&album=${album.id}`,
-        cancel_url: `${req.headers.origin || 'http://localhost:5000'}/?canceled=true`,
-        metadata: {
-          albumId: album.id.toString(),
-          albumTitle: album.title,
-        },
-      });
-
+      // TODO: Integrate with Cashfree here
+      // This is a placeholder response
       res.json({ 
-        sessionId: session.id,
-        url: session.url,
+        success: true,
+        message: "Payment initialization successful",
         album: {
           id: album.id,
           title: album.title,
@@ -92,15 +59,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error: any) {
-      res.status(500).json({ error: "Error creating checkout session: " + error.message });
+      res.status(500).json({ error: "Error initiating payment: " + error.message });
     }
   });
 
-  // Purchase completion endpoint
-  app.post("/api/purchase/:id", async (req, res) => {
+  // Payment verification endpoint (to be integrated with Cashfree)
+  app.post("/api/verify-payment", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const album = await storage.getAlbum(id);
+      const { paymentId, albumId } = req.body;
+      const album = await storage.getAlbum(albumId);
       
       if (!album) {
         res.status(404).json({ error: "Album not found" });
@@ -112,14 +79,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      // In a real implementation, you would verify the payment with Stripe
+      // TODO: Verify payment with Cashfree here
       res.json({ 
         success: true, 
-        message: "Purchase successful",
+        message: "Payment verified successfully",
         downloadUrl: `/download/${album.id}`
       });
     } catch (error) {
-      res.status(500).json({ error: "Purchase failed" });
+      res.status(500).json({ error: "Payment verification failed" });
     }
   });
 
