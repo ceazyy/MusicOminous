@@ -31,6 +31,10 @@
       "dest": "client/dist/$1"
     },
     {
+      "src": "/favicon.ico",
+      "dest": "client/dist/favicon.ico"
+    },
+    {
       "src": "/(.*)",
       "dest": "client/dist/index.html"
     }

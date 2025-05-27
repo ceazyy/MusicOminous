@@ -15,6 +15,21 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve static files first
+if (app.get("env") === "production") {
+  const distPath = path.resolve(process.cwd(), "client/dist");
+  log(`[DEBUG] Serving static files from: ${distPath}`);
+  
+  // Serve static files
+  app.use(express.static(distPath));
+  
+  // Serve index.html for all other routes
+  app.get("*", (req, res) => {
+    log(`[DEBUG] Serving index.html for path: ${req.path}`);
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+}
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -91,9 +106,6 @@ app.use((req, res, next) => {
   if (app.get("env") === "development") {
     log("[DEBUG] Setting up Vite in development mode");
     await setupVite(app, server);
-  } else {
-    log("[DEBUG] Setting up static file serving in production mode");
-    serveStatic(app);
   }
 
   // ALWAYS serve the app on port 5000
