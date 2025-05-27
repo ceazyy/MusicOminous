@@ -78,7 +78,15 @@ export class MemStorage implements IStorage {
 
   async createAlbum(insertAlbum: InsertAlbum): Promise<Album> {
     const id = this.currentAlbumId++;
-    const album: Album = { ...insertAlbum, id };
+    const album: Album = {
+      ...insertAlbum,
+      id,
+      releaseDate: insertAlbum.releaseDate ?? null,
+      price: insertAlbum.price ?? null,
+      isReleased: insertAlbum.isReleased ?? null,
+      previewUrl: insertAlbum.previewUrl ?? null,
+      purchaseUrl: insertAlbum.purchaseUrl ?? null
+    };
     this.albums.set(id, album);
     return album;
   }
